@@ -1,190 +1,111 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 const readline = require('readline');
+const crypto = require('crypto');
 
-const tmpFolder = path.join('./', 'tmp');
-if (!fs.existsSync(tmpFolder)) {
-    fs.mkdirSync(tmpFolder);
-}
-
-const fileOutput = path.join('./tmp', 'xl.json'); // Menyimpan hasil JSON
-const tokenFile = path.join('./tmp', 'xl.token'); // Menyimpan token di path tetap
-let accessToken = null;
-let refreshToken = null;
-
-// Membaca input dari command line
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+   input: process.stdin,
+   output: process.stdout
 });
 
 function prompt(question) {
-    return new Promise((resolve) => rl.question(question, resolve));
+   return new Promise((resolve) => rl.question(question, resolve));
 }
 
-console.log("=================================");
-console.log("        Cek Kuota XL            ");
-console.log("=================================");
+async function sidiva(number) {
+   try {
+      if (!number) throw new Error('Number is required');
 
-// Fungsi untuk login menggunakan email
-async function login() {
-    // Cek apakah file token sudah ada, jika ya berarti sudah login
-    if (fs.existsSync(tokenFile)) {
-        console.log("Anda sudah login.");
-        return; // Keluar dari fungsi jika sudah login
-    }
+      let msisdn = number.replace(/\D/g, '');
 
-    const login_email = await prompt("Masukkan email: ");
-    console.log(`Login ${login_email}...`);
+      if (msisdn.startsWith('08')) {
+         msisdn = '62' + msisdn.slice(1);
+      } else if (msisdn.startsWith('8')) {
+         msisdn = '62' + msisdn;
+      } else if (!msisdn.startsWith('62')) {
+         throw new Error('Format nomor tidak valid');
+      }
 
-    try {
-        const response = await axios.post(`https://srg-txl-login-controller-service.ext.dp.xl.co.id/v2/auth/email/${login_email}`, null, {
+      const secret = 'zhYqHrObvu62ZJOJeWADvp2a';
+      const timestamp = Date.now() + 10000;
+
+      const data = `${msisdn}.${timestamp}`;
+      const hmac = crypto.createHmac('sha256', secret);
+      hmac.update(data);
+      const signature = hmac.digest('hex');
+
+      const response = await axios.post(
+         'https://sidompul.violetvpn.biz.id/api/sidompul',
+         { msisdn, timestamp },
+         {
             headers: {
-                'x-dynatrace': 'MT_3_2_763403741_15-0_a5734da2-0ecb-4c8d-8d21-b008aeec4733_30_456_73',
-                'accept': 'application/json',
-                'authorization': 'Basic ZGVtb2NsaWVudDpkZW1vY2xpZW50c2VjcmV0',
-                'language': 'en',
-                'version': '4.1.2',
-                'user-agent': 'okhttp/3.12.1'
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${signature}`
             }
-        });
-        if (response.data.statusCode === 200) {
-            console.log("OTP telah dikirim ke email.");
-            await verifyOtp(login_email);
-        } else {
-            console.error(`[${response.data.statusCode}] ${response.data.statusDescription}`);
-        }
-    } catch (error) {
-        console.error("Error in login:", error.response ? error.response.data : error.message);
-    }
+         }
+      );
+
+      return { success: true, data: response.data.data };
+
+   } catch (error) {
+      return {
+         success: false,
+         message:
+            error.response?.data?.message ||
+            error.message ||
+            'Failed to fetch data'
+      };
+   }
 }
 
-// Fungsi untuk memverifikasi OTP dan menyimpan token
-async function verifyOtp(login_email) {
-    const otp = await prompt("Masukkan OTP: ");
-    try {
-        const response = await axios.get(`https://srg-txl-login-controller-service.ext.dp.xl.co.id/v2/auth/email/${login_email}/${otp}/000000000000000`, {
+async function cekKuotaXL() {
+   const nomor = await prompt("Masukkan nomor XL: ");
+
+   try {
+      const response = await axios.get(
+         `https://srg-txl-utility-service.ext.dp.xl.co.id/v5/package/v5.2/check/${nomor}`,
+         {
             headers: {
-                'x-dynatrace': 'MT_3_2_763403741_15-0_a5734da2-0ecb-4c8d-8d21-b008aeec4733_30_456_73',
-                'accept': 'application/json',
-                'authorization': 'Basic ZGVtb2NsaWVudDpkZW1vY2xpZW50c2VjcmV0',
-                'language': 'en',
-                'version': '4.1.2',
-                'user-agent': 'okhttp/3.12.1'
+               'user-agent': 'okhttp/3.12.1',
+               'accept': 'application/json'
             }
-        });
-        if (response.data.statusCode === 200) {
-            accessToken = response.data.result.data.accessToken;
-            refreshToken = response.data.result.data.refreshToken;
+         }
+      );
 
-            // Simpan token ke file xl.json
-            fs.writeFileSync(tokenFile, JSON.stringify({ emailToken: login_email, accessToken, refreshToken }, null, 2));
-            console.log("Login berhasil. Token telah disimpan di /tmp/xl.json.");
-        } else {
-            console.error(`[${response.data.statusCode}] ${response.data.statusDescription}`);
-        }
-    } catch (error) {
-        console.error("Error in verifyOtp:", error.response ? error.response.data : error.message);
-    }
+      console.log("\nData Kuota XL:");
+      console.log(JSON.stringify(response.data.result?.data, null, 2));
+
+   } catch (error) {
+      console.log(error.response?.data || error.message);
+   }
 }
 
-// Fungsi untuk mengecek kuota
-async function cekKuotaData() {
-    if (!accessToken) {
-        if (fs.existsSync(tokenFile)) {
-            const tokenData = JSON.parse(fs.readFileSync(tokenFile));
-            accessToken = tokenData.accessToken;
-            refreshToken = tokenData.refreshToken;
-        } else {
-            console.log("Belum login. Silakan login terlebih dahulu.");
-            return;
-        }
-    }
+async function cekSidiva() {
+   const nomor = await prompt("Masukkan nomor untuk Sidiva: ");
+   const result = await sidiva(nomor);
 
-    const nomer_hp = await prompt("Masukkan nomor HP (contoh: 6281234567890): ");
-    console.log(`Cek kuota untuk nomor ${nomer_hp}...`);
-
-    try {
-        const response = await axios.get(`https://srg-txl-utility-service.ext.dp.xl.co.id/v5/package/v5.2/check/${nomer_hp}`, {
-            headers: {
-                'x-dynatrace': 'MT_3_1_763403741_16-0_a5734da2-0ecb-4c8d-8d21-b008aeec4733_0_396_167',
-                'accept': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-                'language': 'ID',
-                'version': '7.0.0',
-                'user-agent': 'okhttp/3.12.1',
-                'content-length': '0'
-            }
-        });
-        if (response.data.statusCode === 200) {
-            console.log("Data Kuota:", JSON.stringify(response.data.result.data, null, 2));
-        } else {
-            console.error(`[${response.data.statusCode}] ${response.data.statusDescription}`);
-            console.log(response.data.result.errorMessage);
-        }
-    } catch (error) {
-        console.error("Error in cekKuotaData:", error.response ? error.response.data : error.message);
-    }
+   if (result.success) {
+      console.log("\nData Sidiva:");
+      console.log(JSON.stringify(result.data, null, 2));
+   } else {
+      console.log(result.message);
+   }
 }
 
-// Fungsi untuk logout
-async function logout() {
-    if (!accessToken) {
-        console.log("Belum login atau sudah logout.");
-        return;
-    }
-
-    try {
-        const response = await axios.post('https://srg-txl-login-controller-service.ext.dp.xl.co.id/v3/auth/logout', null, {
-            headers: {
-                'x-dynatrace': 'MT_3_4_763403741_22-0_a5734da2-0ecb-4c8d-8d21-b008aeec4733_0_284_143',
-                'accept': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-                'language': 'en',
-                'version': '4.1.2',
-                'user-agent': 'okhttp/3.12.1'
-            }
-        });
-        if (response.data.statusCode === 200) {
-            console.log("Logout berhasil.");
-            // Hapus token dari file
-            fs.unlinkSync(tokenFile);
-            accessToken = null;
-            refreshToken = null;
-        } else {
-            console.error(`[${response.data.statusCode}] ${response.data.statusDescription}`);
-        }
-    } catch (error) {
-        console.error("Error in logout:", error.response ? error.response.data : error.message);
-    }
-}
-
-// Fungsi utama untuk memilih fitur
 async function main() {
-    while (true) {
-        console.log("\nPilih fitur:");
-        console.log("1. Login");
-        console.log("2. Cek Kuota Data");
-        console.log("3. Logout");
-        console.log("4. Keluar");
+   while (true) {
+      console.log("\n1. Cek Kuota XL");
+      console.log("2. Cek Sidiva");
+      console.log("3. Keluar");
 
-        const choice = await prompt("Masukkan pilihan: ");
-        if (choice === '1') {
-            await login();
-        } else if (choice === '2') {
-            await cekKuotaData();
-        } else if (choice === '3') {
-            await logout();
-        } else if (choice === '4') {
-            console.log("Terima kasih! Sampai jumpa.");
-            rl.close();
-            break; // Keluar dari loop dan mengakhiri aplikasi
-        } else {
-            console.log("Pilihan tidak valid. Silakan coba lagi.");
-        }
-    }
+      const choice = await prompt("Pilih: ");
+
+      if (choice === '1') await cekKuotaXL();
+      else if (choice === '2') await cekSidiva();
+      else if (choice === '3') {
+         rl.close();
+         break;
+      }
+   }
 }
 
-// Menjalankan aplikasi
 main();
