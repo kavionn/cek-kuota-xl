@@ -43,8 +43,7 @@ npm start
 1.  Jalankan program dengan `npm start`
 2.  Pilih menu yang tersedia:
     -   **1** → Cek Kuota XL
-    -   **2** → Cek Sidiva
-    -   **3** → Keluar
+    -   **2** → Keluar
 3.  Masukkan nomor XL (format bebas, otomatis dinormalisasi)
 
 ------------------------------------------------------------------------
