@@ -58,28 +58,6 @@ async function sidiva(number) {
 }
 
 async function cekKuotaXL() {
-   const nomor = await prompt("Masukkan nomor XL: ");
-
-   try {
-      const response = await axios.get(
-         `https://srg-txl-utility-service.ext.dp.xl.co.id/v5/package/v5.2/check/${nomor}`,
-         {
-            headers: {
-               'user-agent': 'okhttp/3.12.1',
-               'accept': 'application/json'
-            }
-         }
-      );
-
-      console.log("\nData Kuota XL:");
-      console.log(JSON.stringify(response.data.result?.data, null, 2));
-
-   } catch (error) {
-      console.log(error.response?.data || error.message);
-   }
-}
-
-async function cekSidiva() {
    const nomor = await prompt("Masukkan nomor untuk Sidiva: ");
    const result = await sidiva(nomor);
 
@@ -94,14 +72,12 @@ async function cekSidiva() {
 async function main() {
    while (true) {
       console.log("\n1. Cek Kuota XL");
-      console.log("2. Cek Sidiva");
       console.log("3. Keluar");
 
       const choice = await prompt("Pilih: ");
 
       if (choice === '1') await cekKuotaXL();
-      else if (choice === '2') await cekSidiva();
-      else if (choice === '3') {
+      else if (choice === '2') {
          rl.close();
          break;
       }
