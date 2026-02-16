@@ -72,7 +72,7 @@ async function cekKuotaXL() {
 async function main() {
    while (true) {
       console.log("\n1. Cek Kuota XL");
-      console.log("3. Keluar");
+      console.log("2. Keluar");
 
       const choice = await prompt("Pilih: ");
 
